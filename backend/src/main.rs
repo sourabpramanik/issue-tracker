@@ -1,10 +1,14 @@
 use actix_web::{
-    get,
+    dev::ServiceRequest,
+    get, post,
     web::{self, ServiceConfig},
     HttpRequest, HttpResponse, Responder,
 };
 use clerk_rs::{
-    apis::users_api::User, clerk::Clerk, validators::actix::ClerkMiddleware, ClerkConfiguration,
+    apis::users_api::User,
+    clerk::Clerk,
+    validators::actix::{clerk_authorize, ClerkMiddleware},
+    ClerkConfiguration,
 };
 use serde::{Deserialize, Serialize};
 use shuttle_actix_web::ShuttleActixWeb;
@@ -27,6 +31,14 @@ struct Task {
     author: String,
 }
 
+#[derive(Serialize, Deserialize, FromRow)]
+struct NewTask {
+    title: String,
+    description: String,
+    status: String,
+    lable: String,
+}
+
 #[get("/tasks")]
 async fn get_tasks(state: web::Data<AppState>) -> impl Responder {
     let query: Result<Vec<Task>, sqlx::Error> = sqlx::query_as("SELECT * FROM Task")
@@ -44,6 +56,45 @@ async fn get_tasks(state: web::Data<AppState>) -> impl Responder {
     };
 
     HttpResponse::Ok().json(tasks)
+}
+
+#[post("/task")]
+async fn add_task(
+    payload: web::Json<NewTask>,
+    state: web::Data<AppState>,
+    req: HttpRequest,
+) -> impl Responder {
+    let srv_req = ServiceRequest::from_request(req);
+
+    let (_, claim) = match clerk_authorize(&srv_req, &state.client, true).await {
+        Ok(value) => value,
+        Err(_) => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "status":"Failed",
+                "message":"Unauthorized"
+            }));
+        }
+    };
+
+    let query: Result<Task, sqlx::Error> = sqlx::query_as(
+        "INSERT INTO Task(title, description, status, lable, author) VALUES ($1, $2, $3, $, $5) RETURNING id, title, description, status, lable, author",
+    )
+    .bind(&payload.title)
+    .bind(&payload.description)
+    .bind(&payload.status)
+    .bind(&payload.lable)
+    .bind(&claim.sub)
+    .fetch_one(&state.pool)
+    .await;
+
+    if query.is_err() {
+        return HttpResponse::InternalServerError().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Failed to create a task"
+        }));
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({}))
 }
 
 #[get("/users")]
@@ -100,7 +151,8 @@ async fn actix_web(
             web::scope("/api")
                 .wrap(ClerkMiddleware::new(clerk_config, None, true))
                 .service(get_users)
-                .service(get_tasks),
+                .service(get_tasks)
+                .service(add_task),
         )
         .service(actix_files::Files::new("/", "./frontend/dist").index_file("index.html"))
         .app_data(state);
