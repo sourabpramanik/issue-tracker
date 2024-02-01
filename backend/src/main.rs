@@ -27,7 +27,7 @@ struct Task {
     title: String,
     description: String,
     status: String,
-    lable: String,
+    label: String,
     author: String,
 }
 
@@ -36,7 +36,7 @@ struct NewTask {
     title: String,
     description: String,
     status: String,
-    lable: String,
+    label: String,
 }
 
 #[get("/tasks")]
@@ -77,12 +77,12 @@ async fn add_task(
     };
 
     let query: Result<Task, sqlx::Error> = sqlx::query_as(
-        "INSERT INTO Task(title, description, status, lable, author) VALUES ($1, $2, $3, $, $5) RETURNING id, title, description, status, lable, author",
+        "INSERT INTO Task(title, description, status, label, author) VALUES ($1, $2, $3, $, $5) RETURNING id, title, description, status, label, author",
     )
     .bind(&payload.title)
     .bind(&payload.description)
     .bind(&payload.status)
-    .bind(&payload.lable)
+    .bind(&payload.label)
     .bind(&claim.sub)
     .fetch_one(&state.pool)
     .await;
