@@ -36,7 +36,6 @@ export default function UsersTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Label</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
