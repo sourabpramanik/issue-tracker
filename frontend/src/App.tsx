@@ -1,14 +1,19 @@
-import { SignIn, SignedIn, SignedOut } from "@clerk/clerk-react";
-import UsersTable from "./components/users-table";
+import { SignIn, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
+import UsersTable from "@/components/issue-table";
 
 function App() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+    <main>
       <SignedOut>
         <SignIn />
       </SignedOut>
       <SignedIn>
-        <UsersTable />
+        <div className="p-20 flex flex-col items-center space-y-7">
+          <div className="fixed top-6 right-6">
+            <UserButton afterSignOutUrl="/" />
+          </div>
+          <UsersTable />
+        </div>
       </SignedIn>
     </main>
   );
