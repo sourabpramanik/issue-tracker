@@ -10,14 +10,7 @@ import { Loader } from "lucide-react";
 import IssueModal from "@/components/issue-modal";
 import Row from "./row";
 import { useGetTasks } from "@/lib/hooks";
-
-export interface TaskSchema {
-  title: string;
-  description: string;
-  status: "todo" | "inprogress" | "done" | "backlog";
-  label: "bug" | "feature" | "documentation";
-  author: string;
-}
+import { IssueSchema } from "@/lib/schema";
 
 export default function UsersTable() {
   const { isLoading, data } = useGetTasks();
@@ -41,7 +34,7 @@ export default function UsersTable() {
             </TableHeader>
             <TableBody>
               {data.length ? (
-                data.map((task: TaskSchema, id: string) => {
+                data.map((task: IssueSchema, id: string) => {
                   return <Row key={id} task={task} />;
                 })
               ) : (

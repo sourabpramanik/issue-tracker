@@ -9,9 +9,9 @@ import {
   Timer,
   Trash2,
 } from "lucide-react";
-import { TaskSchema } from ".";
 import { useGetUser } from "@/lib/hooks";
 import { Badge } from "../ui/badge";
+import { IssueSchema } from "@/lib/schema";
 
 const statusIcon = {
   todo: <Circle className="mr-2 h-4 w-4 text-muted-foreground" />,
@@ -20,7 +20,7 @@ const statusIcon = {
   backlog: <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />,
 };
 
-const Row = ({ task }: { task: TaskSchema }) => {
+const Row = ({ task }: { task: IssueSchema }) => {
   const userData = useGetUser(task.author);
   return (
     <TableRow>
