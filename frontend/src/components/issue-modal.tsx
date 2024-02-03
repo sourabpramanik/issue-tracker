@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -28,8 +28,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader } from "lucide-react";
-import { toast } from "sonner";
-import { useState } from "react";
+import { useIssueModalStore, useIssueStore } from "@/lib/store";
+import { useCreateIssue, useEditIssue, useGetIssue } from "@/lib/hooks";
+import { useEffect } from "react";
 
 const status = ["todo", "inprogress", "done", "backlog"] as const;
 const label = ["bug", "feature", "documentation"] as const;
@@ -48,12 +49,11 @@ const formSchema = z.object({
   }),
   author: z.string({ required_error: "Author is required" }),
 });
+
 export default function IssueDialog() {
+  const { isOpen, setClose } = useIssueModalStore();
   return (
-    <Dialog>
-      <DialogTrigger>
-        <Button>Create a new issue</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={() => setClose()}>
       <DialogContent className="rounded-md">
         <IssueCard />
       </DialogContent>
@@ -63,6 +63,9 @@ export default function IssueDialog() {
 
 export function IssueCard() {
   const { user } = useUser();
+  const { edit_issue_id } = useIssueStore();
+  const { data: issue } = useGetIssue(edit_issue_id);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -73,28 +76,25 @@ export function IssueCard() {
       author: user?.id,
     },
   });
-  const [isLoading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (issue) {
+      form.setValue("title", issue.title);
+      form.setValue("description", issue.description);
+      form.setValue("status", issue.status);
+      form.setValue("label", issue.label);
+    }
+  }, [issue]);
+  const { isMutating: createMutating, trigger: createTrigger } =
+    useCreateIssue();
+  const { isMutating: editMutating, trigger: editTrigger } = useEditIssue();
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    setLoading(true);
-    fetch("/api/task", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(values),
-    })
-      .then(() => {
-        toast.success("Task has been created.");
-      })
-      .catch(() => {
-        toast.success("Falied to create the task.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    edit_issue_id === ""
+      ? createTrigger(values)
+      : editTrigger({ id: edit_issue_id, ...values });
   }
+  const noAuth = edit_issue_id !== "" && user?.id !== issue?.author;
   return (
     <Card className="border-0 bg-background">
       <CardHeader>
@@ -107,6 +107,7 @@ export function IssueCard() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <FormField
+              disabled={noAuth}
               control={form.control}
               name="title"
               render={({ field }) => (
@@ -120,6 +121,7 @@ export function IssueCard() {
               )}
             />
             <FormField
+              disabled={noAuth}
               control={form.control}
               name="description"
               render={({ field }) => (
@@ -143,6 +145,7 @@ export function IssueCard() {
                       <Select
                         defaultValue={field.value}
                         onValueChange={field.onChange}
+                        disabled={noAuth}
                       >
                         <SelectTrigger className="w-[180px]">
                           <SelectValue
@@ -177,6 +180,7 @@ export function IssueCard() {
                       <Select
                         defaultValue={field.value}
                         onValueChange={field.onChange}
+                        disabled={noAuth}
                       >
                         <SelectTrigger className="w-[180px]">
                           <SelectValue
@@ -202,10 +206,14 @@ export function IssueCard() {
                 )}
               />
             </div>
-            <Button type="submit">
-              {isLoading && <Loader className="w-3 h-3 animate-spin" />}
-              Submit
-            </Button>
+            {!noAuth && (
+              <Button type="submit">
+                {(createMutating || editMutating) && (
+                  <Loader className="w-3 h-3 animate-spin" />
+                )}
+                Submit
+              </Button>
+            )}
           </form>
         </Form>
       </CardContent>

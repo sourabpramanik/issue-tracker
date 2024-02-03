@@ -1,6 +1,7 @@
 use actix_web::{
+    delete,
     dev::ServiceRequest,
-    get, post,
+    get, patch, post,
     web::{self, ServiceConfig},
     HttpRequest, HttpResponse, Responder,
 };
@@ -22,7 +23,7 @@ struct AppState {
 }
 
 #[derive(Serialize, Deserialize, FromRow)]
-struct Task {
+struct Issue {
     id: i32,
     title: String,
     description: String,
@@ -32,7 +33,7 @@ struct Task {
 }
 
 #[derive(Serialize, Deserialize, FromRow, Debug)]
-struct NewTask {
+struct NewIssue {
     title: String,
     description: String,
     status: String,
@@ -40,13 +41,13 @@ struct NewTask {
     author: String,
 }
 
-#[get("/tasks")]
-async fn get_tasks(state: web::Data<AppState>) -> impl Responder {
-    let query: Result<Vec<Task>, sqlx::Error> = sqlx::query_as("SELECT * FROM Task")
+#[get("/issues")]
+async fn get_issues(state: web::Data<AppState>) -> impl Responder {
+    let query: Result<Vec<Issue>, sqlx::Error> = sqlx::query_as("SELECT * FROM issues")
         .fetch_all(&state.pool)
         .await;
 
-    let tasks = match query {
+    let issues = match query {
         Ok(value) => value,
         Err(e) => {
             return HttpResponse::InternalServerError().json(serde_json::json!({
@@ -56,13 +57,38 @@ async fn get_tasks(state: web::Data<AppState>) -> impl Responder {
         }
     };
 
-    HttpResponse::Ok().json(tasks)
+    HttpResponse::Ok().json(issues)
 }
 
-#[post("/task")]
-async fn add_task(payload: web::Json<NewTask>, state: web::Data<AppState>) -> impl Responder {
-    let query: Result<Task, sqlx::Error> = sqlx::query_as(
-        "INSERT INTO Task (title, description, status, label, author) VALUES ($1, $2, $3, $4, $5) RETURNING *"
+#[get("/issue/{issue_id}")]
+async fn get_issue(state: web::Data<AppState>, path: web::Path<i32>) -> impl Responder {
+    let issue_id = path.into_inner();
+
+    let query: Result<Issue, sqlx::Error> = sqlx::query_as("SELECT * FROM issues WHERE id=$1")
+        .bind(issue_id)
+        .fetch_one(&state.pool)
+        .await;
+
+    let issue = match query {
+        Ok(value) => value,
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "status":"FAILED",
+                "message":"Something went wrong."
+            }));
+        }
+    };
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "SUCCESS",
+        "data": issue,
+    }))
+}
+
+#[post("/issue")]
+async fn add_issue(payload: web::Json<NewIssue>, state: web::Data<AppState>) -> impl Responder {
+    let create_query: Result<Issue, sqlx::Error> = sqlx::query_as(
+        "INSERT INTO issues (title, description, status, label, author) VALUES ($1, $2, $3, $4, $5) RETURNING *"
     )
     .bind(&payload.title)
     .bind(&payload.description)
@@ -72,14 +98,151 @@ async fn add_task(payload: web::Json<NewTask>, state: web::Data<AppState>) -> im
     .fetch_one(&state.pool)
     .await;
 
-    if query.is_err() {
+    if create_query.is_err() {
         return HttpResponse::InternalServerError().json(serde_json::json!({
             "status":"FAILED",
-            "message":"Failed to create a task"
+            "message":"Failed to create an issue"
         }));
     }
 
-    HttpResponse::Ok().json(serde_json::json!({}))
+    HttpResponse::Ok().json(serde_json::json!({
+        "status":"SUCCESS",
+        "message":"Created the issue successfully"
+    }))
+}
+
+#[patch("/issue/{issue_id}")]
+async fn update_issue(
+    payload: web::Json<NewIssue>,
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+    req: HttpRequest,
+) -> impl Responder {
+    let issue_id = path.into_inner();
+
+    let srv_req = ServiceRequest::from_request(req);
+
+    let claim = match clerk_authorize(&srv_req, &state.client, true).await {
+        Ok(value) => value.1,
+        Err(_) => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "status":"Failed",
+                "message":"Unauthorized"
+            }));
+        }
+    };
+
+    let query: Result<Issue, sqlx::Error> = sqlx::query_as("SELECT * FROM issues WHERE id=$1")
+        .bind(issue_id)
+        .fetch_one(&state.pool)
+        .await;
+
+    if query.is_err() {
+        return HttpResponse::InternalServerError().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Issue does not exist."
+        }));
+    }
+
+    match query {
+        Ok(issue) => {
+            if issue.author != claim.sub {
+                return HttpResponse::Unauthorized().json(serde_json::json!({
+                    "status":"FAILED",
+                    "message":"No authorized to update the issue."
+                }));
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().json(serde_json::json!({
+                "status":"FAILED",
+                "message":"Issue does not exist."
+            }));
+        }
+    }
+
+    let update_query: Result<Issue, sqlx::Error> = sqlx::query_as(
+        "UPDATE issues SET title=$1, description=$2, status=$3, label=$4 WHERE id=$5",
+    )
+    .bind(&payload.title)
+    .bind(&payload.description)
+    .bind(&payload.status)
+    .bind(&payload.label)
+    .bind(issue_id)
+    .fetch_one(&state.pool)
+    .await;
+
+    if update_query.is_err() {
+        return HttpResponse::InternalServerError().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Failed to update the issue"
+        }));
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "SUCCESS",
+        "message":"Updated successfully"
+    }))
+}
+
+#[delete("/issue/{issue_id}")]
+async fn delete_issue(
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+    req: HttpRequest,
+) -> impl Responder {
+    let srv_req = ServiceRequest::from_request(req);
+
+    let claim = match clerk_authorize(&srv_req, &state.client, true).await {
+        Ok(value) => value.1,
+        Err(_) => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "status":"Failed",
+                "message":"Unauthorized"
+            }));
+        }
+    };
+
+    let issue_id = path.into_inner();
+
+    let query: Result<Issue, sqlx::Error> = sqlx::query_as("SELECT * FROM issues WHERE id=$1")
+        .bind(issue_id)
+        .fetch_one(&state.pool)
+        .await;
+
+    match query {
+        Ok(issue) => {
+            if issue.author != claim.sub {
+                return HttpResponse::Unauthorized().json(serde_json::json!({
+                    "status":"FAILED",
+                    "message":"No authorized to delete the issue."
+                }));
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().json(serde_json::json!({
+                "status":"FAILED",
+                "message":"Issue does not exist."
+            }));
+        }
+    }
+
+    let delete_query: Result<Issue, sqlx::Error> = sqlx::query_as("DELETE FROM issues WHERE id=$1")
+        .bind(issue_id)
+        .fetch_one(&state.pool)
+        .await;
+
+    if delete_query.is_err() {
+        return HttpResponse::InternalServerError().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Failed to delete the issue"
+        }));
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "SUCCESS",
+        "message":"Deleted successfully"
+    }))
 }
 
 #[get("/user/self")]
@@ -157,8 +320,11 @@ async fn actix_web(
                 .wrap(ClerkMiddleware::new(clerk_config, None, true))
                 .service(get_user_self)
                 .service(get_user)
-                .service(get_tasks)
-                .service(add_task),
+                .service(get_issues)
+                .service(add_issue)
+                .service(get_issue)
+                .service(update_issue)
+                .service(delete_issue),
         )
         .service(actix_files::Files::new("/", "./frontend/dist").index_file("index.html"))
         .app_data(state);

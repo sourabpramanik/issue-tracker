@@ -1,19 +1,21 @@
 import { create } from 'zustand'
-import { IssueSchema } from './schema'
-
 
 type IssueStore = {
-    issue: IssueSchema,
-    updateIssue: (updatedIssue: IssueSchema) => void
+    edit_issue_id: string,
+    setEditIssueId: (id: string) => void
 }
-export const useStore = create<IssueStore>((set) => ({
-    issue: {
-        id: "",
-        title: "",
-        description: "",
-        status: "todo",
-        label: "bug",
-        author: ""
-    },
-    updateIssue: (updatedTask: IssueSchema) => set((state) => ({ issue: { ...state.issue, ...updatedTask } })),
+export const useIssueStore = create<IssueStore>((set) => ({
+    edit_issue_id: "",
+    setEditIssueId: (id: string) => set(() => ({ edit_issue_id: id })),
+}))
+
+type IssueModalStore = {
+    isOpen: boolean,
+    setOpen: () => void
+    setClose: () => void
+}
+export const useIssueModalStore = create<IssueModalStore>((set) => ({
+    isOpen: false,
+    setOpen: () => set({ isOpen: true }),
+    setClose: () => set({ isOpen: false }),
 }))

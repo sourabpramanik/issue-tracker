@@ -7,17 +7,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader } from "lucide-react";
-import IssueModal from "@/components/issue-modal";
 import Row from "./row";
-import { useGetTasks } from "@/lib/hooks";
+import { useGetIssues } from "@/lib/hooks";
 import { IssueSchema } from "@/lib/schema";
+import { Button } from "@/components/ui/button";
+import { useIssueModalStore, useIssueStore } from "@/lib/store";
 
 export default function UsersTable() {
-  const { isLoading, data } = useGetTasks();
+  const { isLoading, data } = useGetIssues();
+  const { setOpen } = useIssueModalStore();
+  const { setEditIssueId } = useIssueStore();
   return (
     <>
       <div className="w-full flex justify-end">
-        <IssueModal />
+        <Button
+          onClick={() => {
+            setEditIssueId("");
+            setOpen();
+          }}
+        >
+          Create a new issue
+        </Button>
       </div>
       {isLoading && <Loader className="w-4 h-4 animate-spin" />}
       {!isLoading && (
@@ -33,8 +43,8 @@ export default function UsersTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.length ? (
-                data.map((task: IssueSchema, id: string) => {
+              {data?.length ? (
+                data?.map((task: IssueSchema, id: number) => {
                   return <Row key={id} task={task} />;
                 })
               ) : (

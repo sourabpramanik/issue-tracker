@@ -4,14 +4,18 @@ import {
   CheckCircle,
   Circle,
   Edit,
+  Eye,
   HelpCircle,
   Loader,
   Timer,
   Trash2,
 } from "lucide-react";
-import { useGetUser } from "@/lib/hooks";
+import { useDeleteIssue, useGetUser } from "@/lib/hooks";
 import { Badge } from "../ui/badge";
 import { IssueSchema } from "@/lib/schema";
+import { useIssueModalStore, useIssueStore } from "@/lib/store";
+import { Button } from "../ui/button";
+import { useUser } from "@clerk/clerk-react";
 
 const statusIcon = {
   todo: <Circle className="mr-2 h-4 w-4 text-muted-foreground" />,
@@ -22,6 +26,11 @@ const statusIcon = {
 
 const Row = ({ task }: { task: IssueSchema }) => {
   const userData = useGetUser(task.author);
+  const { setEditIssueId } = useIssueStore();
+  const { setOpen } = useIssueModalStore();
+  const { isMutating, trigger } = useDeleteIssue();
+  const { user } = useUser();
+
   return (
     <TableRow>
       <TableCell width={"200px"}>
@@ -52,8 +61,29 @@ const Row = ({ task }: { task: IssueSchema }) => {
       </TableCell>
       <TableCell width={"100px"}>
         <div className="flex items-center gap-4">
-          <Edit className="w-4 h-4" />
-          <Trash2 className="w-4 h-4" />
+          <Button
+            variant={"ghost"}
+            onClick={() => task.id && (setEditIssueId(task.id), setOpen())}
+          >
+            {user?.id === task.author ? (
+              <Edit className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </Button>
+
+          {user?.id === task.author && (
+            <Button
+              variant={"ghost"}
+              onClick={() => task.id && trigger({ id: task.id })}
+            >
+              {isMutating ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
