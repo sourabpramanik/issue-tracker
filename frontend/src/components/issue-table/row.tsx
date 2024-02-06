@@ -1,17 +1,19 @@
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Bug,
   CheckCircle,
   Circle,
   Edit,
   Eye,
+  File,
   HelpCircle,
   Loader,
+  Rocket,
   Timer,
   Trash2,
 } from "lucide-react";
 import { useDeleteIssue, useGetUser } from "@/lib/hooks";
-import { Badge } from "../ui/badge";
 import { IssueSchema } from "@/lib/schema";
 import { useIssueModalStore, useIssueStore } from "@/lib/store";
 import { Button } from "../ui/button";
@@ -22,6 +24,12 @@ const statusIcon = {
   inprogress: <Timer className="mr-2 h-4 w-4 text-muted-foreground" />,
   done: <CheckCircle className="mr-2 h-4 w-4 text-muted-foreground" />,
   backlog: <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />,
+};
+
+const labelIcon = {
+  bug: <Bug className="mr-2 h-4 w-4 text-muted-foreground" />,
+  feature: <Rocket className="mr-2 h-4 w-4 text-muted-foreground" />,
+  documentation: <File className="mr-2 h-4 w-4 text-muted-foreground" />,
 };
 
 const Row = ({ task }: { task: IssueSchema }) => {
@@ -46,17 +54,18 @@ const Row = ({ task }: { task: IssueSchema }) => {
           </div>
         )}
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">{task.label}</Badge>
-          <span>{task.title}</span>
-        </div>
-      </TableCell>
+      <TableCell>{task.title}</TableCell>
       <TableCell width={"300px"}>{task.description}</TableCell>
       <TableCell width={"150px"}>
         <div className="flex items-center">
           {statusIcon[task.status]}
           <span>{task.status.toUpperCase()}</span>
+        </div>
+      </TableCell>
+      <TableCell width={"150px"}>
+        <div className="flex items-center">
+          {labelIcon[task.label]}
+          <span>{task.label.toUpperCase()}</span>
         </div>
       </TableCell>
       <TableCell width={"100px"}>
