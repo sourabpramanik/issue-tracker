@@ -41,6 +41,29 @@ struct NewIssue {
     author: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct UserModel {
+    id: Option<String>,
+    username: Option<Option<String>>,
+    first_name: Option<Option<String>>,
+    last_name: Option<Option<String>>,
+    email_addresses: Option<Vec<clerk_rs::models::EmailAddress>>,
+    profile_image_url: Option<String>,
+}
+
+impl From<clerk_rs::models::user::User> for UserModel {
+    fn from(value: clerk_rs::models::user::User) -> Self {
+        Self {
+            id: value.id,
+            username: value.username,
+            first_name: value.first_name,
+            last_name: value.last_name,
+            email_addresses: value.email_addresses,
+            profile_image_url: value.profile_image_url,
+        }
+    }
+}
+
 #[get("/issues")]
 async fn get_issues(state: web::Data<AppState>) -> impl Responder {
     let query: Result<Vec<Issue>, sqlx::Error> = sqlx::query_as("SELECT * FROM issues")
@@ -245,38 +268,25 @@ async fn delete_issue(
     }))
 }
 
-#[get("/user/self")]
-async fn get_user_self(state: web::Data<AppState>, req: HttpRequest) -> impl Responder {
+#[get("/user/me")]
+async fn get_user(state: web::Data<AppState>, req: HttpRequest) -> impl Responder {
     let srv_req = ServiceRequest::from_request(req);
-
-    let claim = match clerk_authorize(&srv_req, &state.client, true).await {
+    let jwt = match clerk_authorize(&srv_req, &state.client, true).await {
         Ok(value) => value.1,
-        Err(_) => {
-            return HttpResponse::Unauthorized().json(serde_json::json!({
-                "status":"Failed",
-                "message":"Unauthorized"
-            }));
-        }
+        Err(e) => return e,
     };
 
-    let Ok(user) = User::get_user(&state.client, &claim.sub).await else {
+    let Ok(user) = User::get_user(&state.client, &jwt.sub).await else {
         return HttpResponse::InternalServerError().json(serde_json::json!({
-            "status": "FAILED",
-            "message": "Unable to retrieve all users",
+            "message": "Unable to retrieve user",
         }));
     };
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "id": &user.id,
-        "first_name": &user.first_name,
-        "last_name": &user.last_name,
-        "username": &user.username,
-        "avatar": &user.profile_image_url
-    }))
+    HttpResponse::Ok().json(Into::<UserModel>::into(user))
 }
 
 #[get("/user/{user_id}")]
-async fn get_user(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+async fn get_user_by_id(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let user_id = path.into_inner();
     let Ok(user) = User::get_user(&state.client, &user_id).await else {
         return HttpResponse::InternalServerError().json(serde_json::json!({
@@ -285,13 +295,7 @@ async fn get_user(state: web::Data<AppState>, path: web::Path<String>) -> impl R
         }));
     };
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "id": &user.id,
-        "first_name": &user.first_name,
-        "last_name": &user.last_name,
-        "username": &user.username,
-        "avatar": &user.profile_image_url
-    }))
+    HttpResponse::Ok().json(Into::<UserModel>::into(user))
 }
 
 #[shuttle_runtime::main]
@@ -318,8 +322,8 @@ async fn actix_web(
         cfg.service(
             web::scope("/api")
                 .wrap(ClerkMiddleware::new(clerk_config, None, true))
-                .service(get_user_self)
                 .service(get_user)
+                .service(get_user_by_id)
                 .service(get_issues)
                 .service(add_issue)
                 .service(get_issue)

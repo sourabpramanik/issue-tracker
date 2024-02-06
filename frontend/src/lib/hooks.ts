@@ -1,27 +1,19 @@
 import useSWR, { Fetcher } from "swr"
 import useSWRMutation from 'swr/mutation'
-import { IssueSchema } from "./schema";
+import { IssueSchema, UserSchema } from "./schema";
 import { toast } from "sonner";
 import { useIssueModalStore } from "./store";
 
-export type User = {
-    id: string,
-    first_name: string,
-    last_name: string,
-    username: string,
-    avatar: string,
-}
 export const useGetUser = (user_id: string | undefined) => {
-    const fetcher: Fetcher<User, string> = (url) => fetch(url).then(res => res.json())
+    const fetcher: Fetcher<UserSchema, string> = (url) => fetch(url).then(res => res.json())
     const { isLoading, data } = useSWR(`/api/user/${user_id}`, fetcher);
-
     return { isLoading, data };
 }
 
 export const useGetIssues = () => {
-    const fetcher: Fetcher<IssueSchema[], string> = () =>
-        fetch("/api/issues").then((res) => res.json())
-    const { isLoading, data } = useSWR("/api/issue", fetcher);
+    const fetcher: Fetcher<IssueSchema[], string> = (url) =>
+        fetch(url).then((res) => res.json())
+    const { isLoading, data } = useSWR(['/api/issues', "/api/issue"], ([url, _]) => fetcher(url));
     return { isLoading, data };
 }
 

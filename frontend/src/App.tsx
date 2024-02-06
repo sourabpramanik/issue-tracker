@@ -1,5 +1,5 @@
 import { SignIn, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
-import UsersTable from "@/components/issue-table";
+import IssuesTable from "@/components/issue-table";
 
 function App() {
   return (
@@ -12,7 +12,7 @@ function App() {
           <div className="fixed top-6 right-6">
             <UserButton afterSignOutUrl="/" />
           </div>
-          <UsersTable />
+          <IssuesTable />
         </div>
       </SignedIn>
     </main>

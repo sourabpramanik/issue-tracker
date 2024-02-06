@@ -39,7 +39,7 @@ const Row = ({ task }: { task: IssueSchema }) => {
         ) : (
           <div className="flex items-center gap-3">
             <Avatar>
-              <AvatarImage src={userData.data?.avatar} />
+              <AvatarImage src={userData.data?.profile_image_url} />
               <AvatarFallback>{userData.data?.username}</AvatarFallback>
             </Avatar>
             <p className="font-medium">{userData.data?.username}</p>

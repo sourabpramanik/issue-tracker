@@ -13,7 +13,7 @@ import { IssueSchema } from "@/lib/schema";
 import { Button } from "@/components/ui/button";
 import { useIssueModalStore, useIssueStore } from "@/lib/store";
 
-export default function UsersTable() {
+export default function IssuesTable() {
   const { isLoading, data } = useGetIssues();
   const { setOpen } = useIssueModalStore();
   const { setEditIssueId } = useIssueStore();

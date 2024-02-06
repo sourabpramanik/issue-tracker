@@ -61,7 +61,7 @@ export default function IssueDialog() {
   );
 }
 
-export function IssueCard() {
+function IssueCard() {
   const { user } = useUser();
   const { edit_issue_id } = useIssueStore();
   const { data: issue } = useGetIssue(edit_issue_id);
@@ -85,6 +85,7 @@ export function IssueCard() {
       form.setValue("label", issue.label);
     }
   }, [issue]);
+
   const { isMutating: createMutating, trigger: createTrigger } =
     useCreateIssue();
   const { isMutating: editMutating, trigger: editTrigger } = useEditIssue();
@@ -94,6 +95,8 @@ export function IssueCard() {
       ? createTrigger(values)
       : editTrigger({ id: edit_issue_id, ...values });
   }
+
+  //Check for the author is editing or not
   const noAuth = edit_issue_id !== "" && user?.id !== issue?.author;
   return (
     <Card className="border-0 bg-background">
