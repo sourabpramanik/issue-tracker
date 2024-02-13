@@ -8,7 +8,7 @@ use actix_web::{
 use clerk_rs::{
     apis::users_api::User,
     clerk::Clerk,
-    validators::actix::{clerk_authorize, ClerkMiddleware},
+    validators::actix::{clerk_authorize, ClerkJwt, ClerkMiddleware},
     ClerkConfiguration,
 };
 use serde::{Deserialize, Serialize};
@@ -61,6 +61,15 @@ impl From<clerk_rs::models::user::User> for UserModel {
             email_addresses: value.email_addresses,
             profile_image_url: value.profile_image_url,
         }
+    }
+}
+
+async fn get_jwt_claim(service_request: &ServiceRequest, clerk_client: &Clerk) -> Option<ClerkJwt> {
+    let claim = clerk_authorize(service_request, clerk_client, true).await;
+
+    match claim {
+        Ok(value) => Some(value.1),
+        Err(_) => None,
     }
 }
 
@@ -143,36 +152,28 @@ async fn update_issue(
 ) -> impl Responder {
     let issue_id = path.into_inner();
 
-    let srv_req = ServiceRequest::from_request(req);
+    let service_req = ServiceRequest::from_request(req);
 
-    let claim = match clerk_authorize(&srv_req, &state.client, true).await {
-        Ok(value) => value.1,
-        Err(_) => {
-            return HttpResponse::Unauthorized().json(serde_json::json!({
-                "status":"Failed",
-                "message":"Unauthorized"
-            }));
-        }
-    };
+    let claim = get_jwt_claim(&service_req, &state.client).await;
+
+    if claim.is_none() {
+        return HttpResponse::Forbidden().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Not authorized to update the issue."
+        }));
+    }
 
     let query: Result<Issue, sqlx::Error> = sqlx::query_as("SELECT * FROM issues WHERE id=$1")
         .bind(issue_id)
         .fetch_one(&state.pool)
         .await;
 
-    if query.is_err() {
-        return HttpResponse::InternalServerError().json(serde_json::json!({
-            "status":"FAILED",
-            "message":"Issue does not exist."
-        }));
-    }
-
     match query {
         Ok(issue) => {
-            if issue.author != claim.sub {
+            if issue.author != claim.unwrap().sub {
                 return HttpResponse::Unauthorized().json(serde_json::json!({
                     "status":"FAILED",
-                    "message":"No authorized to update the issue."
+                    "message":"Not authorized to update the issue."
                 }));
             }
         }
@@ -214,17 +215,16 @@ async fn delete_issue(
     path: web::Path<i32>,
     req: HttpRequest,
 ) -> impl Responder {
-    let srv_req = ServiceRequest::from_request(req);
+    let service_req = ServiceRequest::from_request(req);
 
-    let claim = match clerk_authorize(&srv_req, &state.client, true).await {
-        Ok(value) => value.1,
-        Err(_) => {
-            return HttpResponse::Unauthorized().json(serde_json::json!({
-                "status":"Failed",
-                "message":"Unauthorized"
-            }));
-        }
-    };
+    let claim = get_jwt_claim(&service_req, &state.client).await;
+
+    if claim.is_none() {
+        return HttpResponse::Forbidden().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Not authorized to update the issue."
+        }));
+    }
 
     let issue_id = path.into_inner();
 
@@ -235,7 +235,7 @@ async fn delete_issue(
 
     match query {
         Ok(issue) => {
-            if issue.author != claim.sub {
+            if issue.author != claim.unwrap().sub {
                 return HttpResponse::Unauthorized().json(serde_json::json!({
                     "status":"FAILED",
                     "message":"No authorized to delete the issue."
@@ -270,13 +270,18 @@ async fn delete_issue(
 
 #[get("/user/me")]
 async fn get_user(state: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let srv_req = ServiceRequest::from_request(req);
-    let jwt = match clerk_authorize(&srv_req, &state.client, true).await {
-        Ok(value) => value.1,
-        Err(e) => return e,
-    };
+    let service_req = ServiceRequest::from_request(req);
 
-    let Ok(user) = User::get_user(&state.client, &jwt.sub).await else {
+    let claim = get_jwt_claim(&service_req, &state.client).await;
+
+    if claim.is_none() {
+        return HttpResponse::Forbidden().json(serde_json::json!({
+            "status":"FAILED",
+            "message":"Not authorized to update the issue."
+        }));
+    }
+
+    let Ok(user) = User::get_user(&state.client, &claim.unwrap().sub).await else {
         return HttpResponse::InternalServerError().json(serde_json::json!({
             "message": "Unable to retrieve user",
         }));
