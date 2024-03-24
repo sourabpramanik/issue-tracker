@@ -305,7 +305,7 @@ async fn get_user_by_id(state: web::Data<AppState>, path: web::Path<String>) -> 
 
 #[shuttle_runtime::main]
 async fn actix_web(
-    #[shuttle_secrets::Secrets] secrets: SecretStore,
+    #[shuttle_runtime::Secrets] secrets: SecretStore,
     #[shuttle_shared_db::Postgres] pool: PgPool,
 ) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
     // DB Pool
